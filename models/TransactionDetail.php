@@ -25,31 +25,37 @@ class TransactionDetail {
 
     // Create transaction detail
     public function create() {
-        $query = "INSERT INTO " . $this->table_name . " 
-                  SET transaction_id=:transaction_id, product_id=:product_id, 
-                      quantity=:quantity, unit_price=:unit_price, total_price=:total_price";
+        try {
+            $query = "INSERT INTO " . $this->table_name . " 
+                      SET transaction_id=:transaction_id, product_id=:product_id, 
+                          quantity=:quantity, unit_price=:unit_price, total_price=:total_price";
 
-        $stmt = $this->connection->prepare($query);
+            $stmt = $this->connection->prepare($query);
 
-        $this->transaction_id = htmlspecialchars(strip_tags($this->transaction_id));
-        $this->product_id = htmlspecialchars(strip_tags($this->product_id));
-        $this->quantity = htmlspecialchars(strip_tags($this->quantity));
-        $this->unit_price = htmlspecialchars(strip_tags($this->unit_price));
-        $this->total_price = htmlspecialchars(strip_tags($this->total_price));
+            $this->transaction_id = intval($this->transaction_id);
+            $this->product_id = intval($this->product_id);
+            $this->quantity = intval($this->quantity);
+            $this->unit_price = floatval($this->unit_price);
+            $this->total_price = floatval($this->total_price);
 
-        $stmt->bindParam(":transaction_id", $this->transaction_id);
-        $stmt->bindParam(":product_id", $this->product_id);
-        $stmt->bindParam(":quantity", $this->quantity);
-        $stmt->bindParam(":unit_price", $this->unit_price);
-        $stmt->bindParam(":total_price", $this->total_price);
+            $stmt->bindParam(":transaction_id", $this->transaction_id);
+            $stmt->bindParam(":product_id", $this->product_id);
+            $stmt->bindParam(":quantity", $this->quantity);
+            $stmt->bindParam(":unit_price", $this->unit_price);
+            $stmt->bindParam(":total_price", $this->total_price);
 
-        if($stmt->execute()) {
-            return true;
+            if($stmt->execute()) {
+                return true;
+            }
+            
+            // Log error for debugging
+            error_log("TransactionDetail create error: " . print_r($stmt->errorInfo(), true));
+            return false;
+            
+        } catch (Exception $e) {
+            error_log("TransactionDetail create exception: " . $e->getMessage());
+            return false;
         }
-        
-        // Log error for debugging
-        error_log("TransactionDetail create error: " . print_r($stmt->errorInfo(), true));
-        return false;
     }
 
     // Read transaction details by transaction ID

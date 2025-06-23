@@ -13,15 +13,15 @@ $productController = new ProductController();
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
     header('Content-Type: application/json');
     
-    switch ($_POST['action']) {
-        case 'search_product':
-            $keyword = $_POST['keyword'] ?? '';
-            $products = $productController->search($keyword);
-            echo json_encode($products);
-            exit;
-            
-        case 'process_transaction':
-            try {
+    try {
+        switch ($_POST['action']) {
+            case 'search_product':
+                $keyword = $_POST['keyword'] ?? '';
+                $products = $productController->search($keyword);
+                echo json_encode($products);
+                exit;
+                
+            case 'process_transaction':
                 $transactionController = new TransactionController();
                 $data = json_decode($_POST['data'], true);
                 
@@ -30,18 +30,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                     throw new Exception('Data transaksi tidak valid');
                 }
                 
-                // Generate transaction code
-                $data['transaction_code'] = "TRX" . date('YmdHis') . rand(100, 999);
-                
                 $result = $transactionController->store($data);
                 echo json_encode($result);
-            } catch (Exception $e) {
-                echo json_encode([
-                    'success' => false,
-                    'message' => 'Error: ' . $e->getMessage()
-                ]);
-            }
-            exit;
+                exit;
+        }
+    } catch (Exception $e) {
+        error_log("POS Error: " . $e->getMessage());
+        echo json_encode([
+            'success' => false,
+            'message' => 'Error: ' . $e->getMessage()
+        ]);
+        exit;
     }
 }
 ?>
@@ -399,6 +398,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
     .btn-success:disabled {
         background: #6c757d;
         cursor: not-allowed;
+        transform: none;
     }
 
     .empty-cart {
@@ -563,14 +563,19 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                 method: 'POST',
                 body: formData
             })
-            .then(response => response.json())
+            .then(response => {
+                if (!response.ok) {
+                    throw new Error('Network response was not ok');
+                }
+                return response.json();
+            })
             .then(data => {
                 products = data;
                 displayProducts(data);
             })
             .catch(error => {
                 console.error('Error loading products:', error);
-                alert('Gagal memuat produk');
+                alert('Gagal memuat produk: ' + error.message);
             });
         }
 
@@ -744,17 +749,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
 
             const transactionData = {
                 items: cart.map(item => ({
-                    product_id: item.id,
-                    quantity: item.quantity,
-                    unit_price: item.price,
-                    total_price: item.total
+                    product_id: parseInt(item.id),
+                    quantity: parseInt(item.quantity),
+                    unit_price: parseFloat(item.price),
+                    total_price: parseFloat(item.total)
                 })),
-                subtotal: subtotal,
-                tax_amount: tax,
-                total_amount: total,
+                subtotal: parseFloat(subtotal),
+                tax_amount: parseFloat(tax),
+                total_amount: parseFloat(total),
                 payment_method: document.getElementById('paymentMethod').value,
-                payment_amount: paymentAmount,
-                change_amount: paymentAmount - total
+                payment_amount: parseFloat(paymentAmount),
+                change_amount: parseFloat(paymentAmount - total)
             };
 
             console.log('Sending transaction data:', transactionData);
@@ -769,24 +774,32 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
             })
             .then(response => {
                 if (!response.ok) {
-                    throw new Error('Network response was not ok');
+                    throw new Error('Network response was not ok: ' + response.status);
                 }
-                return response.json();
+                return response.text();
             })
-            .then(data => {
-                console.log('Transaction response:', data);
-                
-                if (data.success) {
-                    alert('Transaksi berhasil! Kode: ' + (data.transaction_code || 'N/A'));
-                    // Reset cart
-                    cart = [];
-                    updateCartDisplay();
-                    document.getElementById('paymentAmount').value = '';
-                    document.getElementById('changeAmount').value = '';
-                    // Reload products to update stock
-                    loadProducts('');
-                } else {
-                    alert('Error: ' + (data.message || 'Transaksi gagal'));
+            .then(text => {
+                console.log('Raw response:', text);
+                try {
+                    const data = JSON.parse(text);
+                    console.log('Parsed response:', data);
+                    
+                    if (data.success) {
+                        alert('Transaksi berhasil! Kode: ' + (data.transaction_code || 'N/A'));
+                        // Reset cart
+                        cart = [];
+                        updateCartDisplay();
+                        document.getElementById('paymentAmount').value = '';
+                        document.getElementById('changeAmount').value = '';
+                        // Reload products to update stock
+                        loadProducts('');
+                    } else {
+                        alert('Error: ' + (data.message || 'Transaksi gagal'));
+                    }
+                } catch (e) {
+                    console.error('JSON parse error:', e);
+                    console.error('Response text:', text);
+                    alert('Error parsing response: ' + e.message);
                 }
             })
             .catch(error => {

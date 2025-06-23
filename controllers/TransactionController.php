@@ -81,22 +81,31 @@ class TransactionController {
     
     public function store($data) {
         try {
+            // Validate input data
+            if (!isset($data['items']) || empty($data['items'])) {
+                throw new Exception("No items in transaction");
+            }
+
+            if (!isset($data['subtotal']) || !isset($data['total_amount'])) {
+                throw new Exception("Missing required transaction amounts");
+            }
+
             $this->beginTransaction();
 
             // Generate unique transaction code
             $transaction_code = "TRX" . date('YmdHis') . rand(100, 999);
 
-            // Set data transaksi
+            // Set transaction data
             $this->transaction->user_id = $_SESSION['user_id'];
             $this->transaction->transaction_code = $transaction_code;
             $this->transaction->transaction_date = date('Y-m-d H:i:s');
-            $this->transaction->subtotal = $data['subtotal'];
-            $this->transaction->tax_amount = $data['tax_amount'] ?? 0.00;
-            $this->transaction->discount_amount = isset($data['discount_amount']) && $data['discount_amount'] !== '' ? $data['discount_amount'] : 0.00;
-            $this->transaction->total_amount = $data['total_amount'];
-            $this->transaction->payment_method = $data['payment_method'];
-            $this->transaction->payment_amount = $data['payment_amount'];
-            $this->transaction->change_amount = $data['change_amount'] ?? 0.00;
+            $this->transaction->subtotal = floatval($data['subtotal']);
+            $this->transaction->tax_amount = isset($data['tax_amount']) ? floatval($data['tax_amount']) : 0.00;
+            $this->transaction->discount_amount = isset($data['discount_amount']) && $data['discount_amount'] !== '' ? floatval($data['discount_amount']) : 0.00;
+            $this->transaction->total_amount = floatval($data['total_amount']);
+            $this->transaction->payment_method = $data['payment_method'] ?? 'cash';
+            $this->transaction->payment_amount = floatval($data['payment_amount']);
+            $this->transaction->change_amount = isset($data['change_amount']) ? floatval($data['change_amount']) : 0.00;
             $this->transaction->notes = $data['notes'] ?? null;
             $this->transaction->status = 'completed';
 
@@ -113,11 +122,16 @@ class TransactionController {
 
             // Insert transaction details
             foreach ($data['items'] as $item) {
+                // Validate item data
+                if (!isset($item['product_id']) || !isset($item['quantity']) || !isset($item['unit_price'])) {
+                    throw new Exception("Invalid item data");
+                }
+
                 $this->transactionDetail->transaction_id = $transaction_id;
-                $this->transactionDetail->product_id = $item['product_id'];
-                $this->transactionDetail->quantity = $item['quantity'];
-                $this->transactionDetail->unit_price = $item['unit_price'];
-                $this->transactionDetail->total_price = $item['total_price'];
+                $this->transactionDetail->product_id = intval($item['product_id']);
+                $this->transactionDetail->quantity = intval($item['quantity']);
+                $this->transactionDetail->unit_price = floatval($item['unit_price']);
+                $this->transactionDetail->total_price = floatval($item['total_price']);
                 
                 if (!$this->transactionDetail->create()) {
                     throw new Exception("Failed to create transaction detail for product ID: " . $item['product_id']);
@@ -140,6 +154,7 @@ class TransactionController {
             
         } catch (Exception $e) {
             $this->rollback();
+            error_log("Transaction error: " . $e->getMessage());
             return [
                 'success' => false,
                 'message' => 'Error: Transaction failed: ' . $e->getMessage()

@@ -37,51 +37,59 @@ class Transaction {
     }
 
     public function create() {
-        if (empty($this->transaction_code)) {
-            $this->transaction_code = $this->generateTransactionCode();
+        try {
+            if (empty($this->transaction_code)) {
+                $this->transaction_code = $this->generateTransactionCode();
+            }
+
+            $query = "INSERT INTO " . $this->table_name . " 
+                (transaction_code, user_id, transaction_date, subtotal, tax_amount, discount_amount, total_amount, 
+                 payment_method, payment_amount, change_amount, notes, status)
+                VALUES
+                (:transaction_code, :user_id, :transaction_date, :subtotal, :tax_amount, :discount_amount, :total_amount, 
+                 :payment_method, :payment_amount, :change_amount, :notes, :status)";
+
+            $stmt = $this->connection->prepare($query);
+
+            // Sanitize data
+            $this->transaction_code = htmlspecialchars(strip_tags($this->transaction_code));
+            $this->user_id = htmlspecialchars(strip_tags($this->user_id));
+            $this->transaction_date = htmlspecialchars(strip_tags($this->transaction_date));
+            $this->subtotal = floatval($this->subtotal);
+            $this->tax_amount = floatval($this->tax_amount);
+            $this->discount_amount = floatval($this->discount_amount);
+            $this->total_amount = floatval($this->total_amount);
+            $this->payment_method = htmlspecialchars(strip_tags($this->payment_method));
+            $this->payment_amount = floatval($this->payment_amount);
+            $this->change_amount = floatval($this->change_amount);
+            $this->notes = $this->notes ? htmlspecialchars(strip_tags($this->notes)) : null;
+            $this->status = htmlspecialchars(strip_tags($this->status));
+
+            $stmt->bindParam(':transaction_code', $this->transaction_code);
+            $stmt->bindParam(':user_id', $this->user_id);
+            $stmt->bindParam(':transaction_date', $this->transaction_date);
+            $stmt->bindParam(':subtotal', $this->subtotal);
+            $stmt->bindParam(':tax_amount', $this->tax_amount);
+            $stmt->bindParam(':discount_amount', $this->discount_amount);
+            $stmt->bindParam(':total_amount', $this->total_amount);
+            $stmt->bindParam(':payment_method', $this->payment_method);
+            $stmt->bindParam(':payment_amount', $this->payment_amount);
+            $stmt->bindParam(':change_amount', $this->change_amount);
+            $stmt->bindParam(':notes', $this->notes);
+            $stmt->bindParam(':status', $this->status);
+
+            if ($stmt->execute()) {
+                $this->id = $this->connection->lastInsertId();
+                return true;
+            }
+            
+            error_log("Transaction create error: " . print_r($stmt->errorInfo(), true));
+            return false;
+            
+        } catch (Exception $e) {
+            error_log("Transaction create exception: " . $e->getMessage());
+            return false;
         }
-
-        $query = "INSERT INTO " . $this->table_name . " 
-            (transaction_code, user_id, transaction_date, subtotal, tax_amount, discount_amount, total_amount, 
-             payment_method, payment_amount, change_amount, notes, status)
-            VALUES
-            (:transaction_code, :user_id, :transaction_date, :subtotal, :tax_amount, :discount_amount, :total_amount, 
-             :payment_method, :payment_amount, :change_amount, :notes, :status)";
-
-        $stmt = $this->connection->prepare($query);
-
-        // Sanitize data
-        $this->transaction_code = htmlspecialchars(strip_tags($this->transaction_code));
-        $this->user_id = htmlspecialchars(strip_tags($this->user_id));
-        $this->transaction_date = htmlspecialchars(strip_tags($this->transaction_date));
-        $this->subtotal = htmlspecialchars(strip_tags($this->subtotal));
-        $this->tax_amount = htmlspecialchars(strip_tags($this->tax_amount));
-        $this->discount_amount = htmlspecialchars(strip_tags($this->discount_amount));
-        $this->total_amount = htmlspecialchars(strip_tags($this->total_amount));
-        $this->payment_method = htmlspecialchars(strip_tags($this->payment_method));
-        $this->payment_amount = htmlspecialchars(strip_tags($this->payment_amount));
-        $this->change_amount = htmlspecialchars(strip_tags($this->change_amount));
-        $this->notes = htmlspecialchars(strip_tags($this->notes));
-        $this->status = htmlspecialchars(strip_tags($this->status));
-
-        $stmt->bindParam(':transaction_code', $this->transaction_code);
-        $stmt->bindParam(':user_id', $this->user_id);
-        $stmt->bindParam(':transaction_date', $this->transaction_date);
-        $stmt->bindParam(':subtotal', $this->subtotal);
-        $stmt->bindParam(':tax_amount', $this->tax_amount);
-        $stmt->bindParam(':discount_amount', $this->discount_amount);
-        $stmt->bindParam(':total_amount', $this->total_amount);
-        $stmt->bindParam(':payment_method', $this->payment_method);
-        $stmt->bindParam(':payment_amount', $this->payment_amount);
-        $stmt->bindParam(':change_amount', $this->change_amount);
-        $stmt->bindParam(':notes', $this->notes);
-        $stmt->bindParam(':status', $this->status);
-
-        if ($stmt->execute()) {
-            $this->id = $this->connection->lastInsertId();
-            return true;
-        }
-        return false;
     }
 
     public function read() {
